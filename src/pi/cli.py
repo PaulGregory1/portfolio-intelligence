@@ -210,6 +210,9 @@ def eval_run(
     limit: int | None = typer.Option(None, help="Only the first N items (after filtering)."),
     category: list[str] | None = typer.Option(None, help="Only these categories."),
     out: Path | None = typer.Option(None, help="Output directory; an existing one is resumed."),
+    retry_errors: bool = typer.Option(
+        False, help="When resuming, rerun items that hit API errors."
+    ),
 ) -> None:
     """Run the evaluation (`pi eval --model ...`). Subcommands: dataset, compare."""
     if ctx.invoked_subcommand is not None:
@@ -236,6 +239,7 @@ def eval_run(
         use_cache=cache,
         price_in=settings.llm_price_input_per_mtok,
         price_out=settings.llm_price_output_per_mtok,
+        retry_errors=retry_errors,
     )
     client = LLMClient.from_settings(settings, model=model_name, base_url=base_url, use_cache=cache)
     data = PortfolioData.load(settings.db_path)

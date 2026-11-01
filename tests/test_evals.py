@@ -221,3 +221,13 @@ def test_rescore_reproduces_scores_from_traces(
     before = run_eval(subset, data, config, lambda _: CountingLLM())
     after = rescore(subset, data, tmp_path)
     assert after["overall"] == before["overall"]
+
+
+def test_resume_can_retry_api_errors(tmp_path: Path) -> None:
+    from pi.evals.runner import completed_ids
+
+    path = tmp_path / "results.jsonl"
+    rows = [{"id": "a", "status": "ok"}, {"id": "b", "status": "error"}]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert completed_ids(path) == {"a", "b"}
+    assert completed_ids(path, retry_errors=True) == {"a"}

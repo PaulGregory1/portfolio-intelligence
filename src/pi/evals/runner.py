@@ -39,6 +39,7 @@ class RunConfig:
     use_cache: bool = False
     price_in: float = 0.0
     price_out: float = 0.0
+    retry_errors: bool = False
 
 
 def default_out_dir(runs_dir: Path, model: str) -> Path:
@@ -46,14 +47,11 @@ def default_out_dir(runs_dir: Path, model: str) -> Path:
     return runs_dir / "evals" / f"{datetime.now():%Y%m%d-%H%M%S}_{slug}"
 
 
-def completed_ids(results: Path) -> set[str]:
+def completed_ids(results: Path, retry_errors: bool = False) -> set[str]:
+    """Items already evaluated; with `retry_errors`, API failures are evaluated again."""
     if not results.exists():
         return set()
-    ids = set()
-    for line in results.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            ids.add(json.loads(line)["id"])
-    return ids
+    return {r["id"] for r in load_results(results) if not (retry_errors and r["status"] == "error")}
 
 
 def result_row(item: EvalItem, trace: Trace, data: PortfolioData) -> dict[str, Any]:
@@ -127,7 +125,7 @@ def run_eval(
     out = config.out_dir
     out.mkdir(parents=True, exist_ok=True)
     results_path = out / "results.jsonl"
-    done = completed_ids(results_path)
+    done = completed_ids(results_path, config.retry_errors)
     todo = [item for item in items if item.id not in done]
     (out / "config.json").write_text(
         json.dumps(
