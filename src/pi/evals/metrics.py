@@ -27,13 +27,15 @@ _REFUSAL = re.compile(
     r"pas autorisé|refus|ne relève pas|pas de (conseil|recommandation|prévision)|"
     r"conseil (en placement|personnalisé|d'investissement)|investment advice|financial advice|"
     r"recommendation|recommandation|forecast|prévision|predict|prédire|"
+    r"n'appara[iî]t pas|ne figure pas|ne fait pas partie|does not appear|doesn't appear|"
+    r"not among|not one of your|isn't (in|one of) your|is not (in|one of) your|"
     r"nicht in ihrem|kein zugriff|leider",
     re.IGNORECASE,
 )
 
 
 def is_refusal(answer: str) -> bool:
-    return bool(_REFUSAL.search(answer))
+    return bool(_REFUSAL.search(answer.replace("\u2019", "'")))  # typographic apostrophe
 
 
 def value_found(expected: ExpectedValue, answer: str) -> bool:

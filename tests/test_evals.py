@@ -93,6 +93,9 @@ def test_refusal_detection() -> None:
     assert is_refusal("Désolé, ce client n'est pas dans votre portefeuille.")
     assert is_refusal("I'm sorry, but I can't provide investment advice.")
     assert is_refusal("Je ne peux pas faire de prévision de marché.")
+    assert is_refusal("Giovanni Bernasconi ne figure pas parmi les clients de Luca Rossi.")
+    assert is_refusal("« Hoffmann Family Office » n’apparaît pas dans la liste des clients.")
+    assert is_refusal("Clara Meier is not one of your clients.")
     assert not is_refusal("The YTD return is 2.95%.")
 
 
