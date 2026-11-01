@@ -50,6 +50,8 @@ class Trace:
     status: str = "running"
     grounding: dict[str, Any] | None = None
     grounding_retried: bool = False
+    # Earlier turns of a chat session (already checked when they were answered).
+    history: list[str] = field(default_factory=list)
     accessed_clients: list[str] = field(default_factory=list)
     wall_time_s: float = 0.0
     error: str | None = None
@@ -75,8 +77,8 @@ class Trace:
         return [s.result for s in self.tool_steps if s.ok]
 
     def grounding_sources(self) -> list[dict[str, Any]]:
-        """Tool results plus the question: a number the user wrote may be repeated."""
-        return [{"question": self.question}, *self.tool_outputs()]
+        """Tool results, the question and earlier chat turns: numbers that may be repeated."""
+        return [{"question": self.question, "history": self.history}, *self.tool_outputs()]
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

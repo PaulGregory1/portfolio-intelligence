@@ -216,3 +216,14 @@ def test_unknown_banker_is_rejected(data: PortfolioData) -> None:
 
     with pytest.raises(ValueError, match="Unknown banker"):
         build_agent(Settings(_env_file=None), data, "B42", llm=ScriptedLLM([]))  # type: ignore[call-arg]
+
+
+def test_numbers_from_earlier_chat_turns_are_grounded(data: PortfolioData) -> None:
+    history: list[Message] = [
+        {"role": "user", "content": "Quels sont mes clients ?"},
+        {"role": "assistant", "content": "C03 vaut USD 37'085'221.50."},
+    ]
+    agent, llm = make_agent(data, [say("Pour rappel, C03 vaut USD 37'085'221.50.")])
+    result = agent.run("Rappelle-moi la valeur de C03", history=history)
+    assert result.status == "ok"
+    assert llm.requests[0][1:3] == history

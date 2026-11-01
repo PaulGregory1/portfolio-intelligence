@@ -129,6 +129,7 @@ class Agent:
 
     def run(self, question: str, history: list[Message] | None = None) -> AgentResult:
         trace = Trace(question=question, banker_id=self.ctx.banker_id, model=self.llm.model)
+        trace.history = [str(m["content"]) for m in history or [] if m.get("content")]
         messages: list[Message] = [
             self._system(),
             *(history or []),
