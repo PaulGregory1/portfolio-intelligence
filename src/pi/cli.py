@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import typer
@@ -191,3 +192,100 @@ def chat(
             {"role": "user", "content": question},
             {"role": "assistant", "content": result.answer},
         ]
+
+
+eval_app = typer.Typer(help="Evaluate models on the generated question set.")
+app.add_typer(eval_app, name="eval")
+DEFAULT_DATASET = "evals/dataset_v1.jsonl"
+
+
+@eval_app.callback(invoke_without_command=True)
+def eval_run(
+    ctx: typer.Context,
+    model: str | None = typer.Option(None, help="Model slug, default LLM_MODEL."),
+    base_url: str | None = typer.Option(None, help="Endpoint, default LLM_BASE_URL."),
+    dataset: Path = typer.Option(Path(DEFAULT_DATASET), help="Dataset (jsonl)."),
+    concurrency: int = typer.Option(2, help="Questions evaluated in parallel."),
+    cache: bool = typer.Option(False, help="Use the on-disk LLM response cache."),
+    limit: int | None = typer.Option(None, help="Only the first N items (after filtering)."),
+    category: list[str] | None = typer.Option(None, help="Only these categories."),
+    out: Path | None = typer.Option(None, help="Output directory; an existing one is resumed."),
+) -> None:
+    """Run the evaluation (`pi eval --model ...`). Subcommands: dataset, compare."""
+    if ctx.invoked_subcommand is not None:
+        return
+    from pi.data.store import PortfolioData
+    from pi.evals.dataset import load_dataset
+    from pi.evals.report import fmt
+    from pi.evals.runner import RunConfig, default_out_dir, run_eval
+    from pi.llm.client import LLMClient
+
+    settings = get_settings()
+    model_name = model or settings.llm_model
+    items = load_dataset(dataset)
+    if category:
+        items = [i for i in items if i.category in category]
+    if limit:
+        items = items[:limit]
+    config = RunConfig(
+        model=model_name,
+        base_url=base_url or settings.llm_base_url,
+        dataset=dataset,
+        out_dir=out or default_out_dir(settings.runs_dir, model_name),
+        concurrency=concurrency,
+        use_cache=cache,
+        price_in=settings.llm_price_input_per_mtok,
+        price_out=settings.llm_price_output_per_mtok,
+    )
+    client = LLMClient.from_settings(settings, model=model_name, base_url=base_url, use_cache=cache)
+    data = PortfolioData.load(settings.db_path)
+    console.print(f"Evaluating [bold]{model_name}[/bold] on {len(items)} items → {config.out_dir}")
+    counter = {"n": 0}
+
+    def progress(row: dict[str, Any]) -> None:
+        counter["n"] += 1
+        mark = "[green]✓[/green]" if row["success"] else "[red]✗[/red]"
+        console.print(
+            f"{mark} {row['id']:<18} {row['status']:<14} {row['latency_s']:5.1f}s "
+            f"tools={','.join(row['tools_called']) or '-'}"
+        )
+
+    summary = run_eval(items, data, config, lambda _: client, progress)
+    o = summary["overall"]
+    console.print(
+        f"\nsuccess {fmt(o['success_rate'], 'pct')} · numbers {fmt(o['numeric_accuracy'], 'pct')}"
+        f" · grounding {fmt(o['grounding_rate'], 'pct')} · access violations "
+        f"{o['access_violations']} · p50 {fmt(o['latency_p50_s'], 'f1')} s"
+    )
+    console.print(f"Report: {config.out_dir / 'report.md'}")
+
+
+@eval_app.command("dataset")
+def eval_dataset(
+    out: Path = typer.Option(Path(DEFAULT_DATASET), help="Where to write the jsonl file."),
+    seed: int = typer.Option(7, help="Seed of the template sampler."),
+) -> None:
+    """Regenerate the question set; ground truth is computed by the analytics engine."""
+    from collections import Counter
+
+    from pi.data.store import PortfolioData
+    from pi.evals.dataset import build_dataset, save_dataset
+
+    items = build_dataset(PortfolioData.load(get_settings().db_path), seed)
+    save_dataset(items, out)
+    counts = Counter(i.category for i in items)
+    console.print(f"{len(items)} items written to {out}: {dict(counts)}")
+
+
+@eval_app.command("compare")
+def eval_compare(
+    runs: list[Path] = typer.Argument(..., help="Run directories (runs/evals/...)."),
+    out: Path | None = typer.Option(None, help="Also write the table to this file."),
+) -> None:
+    """Markdown comparison table of several evaluation runs."""
+    from pi.evals.report import compare_runs
+
+    table = compare_runs(runs)
+    console.print(table, markup=False)
+    if out:
+        out.write_text(table, encoding="utf-8")
