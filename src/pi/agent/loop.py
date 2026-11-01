@@ -230,7 +230,7 @@ class Agent:
     ) -> tuple[str, Status]:
         """Verify the numbers of the answer; ask the model once to fix ungrounded ones."""
         assert self.grounder is not None
-        report = self.grounder(answer, trace.tool_outputs())
+        report = self.grounder(answer, trace.grounding_sources())
         trace.grounding = report.to_dict()
         if not report.ungrounded_values:
             return answer, "ok"
@@ -247,6 +247,6 @@ class Agent:
         if resp.tool_calls or not resp.content:
             # The correction round does not allow more tool calls: keep the first answer.
             return answer, "ungrounded"
-        report = self.grounder(resp.content, trace.tool_outputs())
+        report = self.grounder(resp.content, trace.grounding_sources())
         trace.grounding = report.to_dict()
         return resp.content, "ok" if not report.ungrounded_values else "ungrounded"

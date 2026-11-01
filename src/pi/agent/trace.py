@@ -74,6 +74,10 @@ class Trace:
         """Successful tool results: the only legitimate source of numbers."""
         return [s.result for s in self.tool_steps if s.ok]
 
+    def grounding_sources(self) -> list[dict[str, Any]]:
+        """Tool results plus the question: a number the user wrote may be repeated."""
+        return [{"question": self.question}, *self.tool_outputs()]
+
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data.update(

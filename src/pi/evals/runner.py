@@ -103,7 +103,7 @@ def rescore(
     rows = []
     for old in load_results(out / "results.jsonl"):
         trace = traces[old["trace_id"]]
-        trace.grounding = check_grounding(trace.answer, trace.tool_outputs()).to_dict()
+        trace.grounding = check_grounding(trace.answer, trace.grounding_sources()).to_dict()
         rows.append(result_row(by_id[old["id"]], trace, data))
     (out / "results.jsonl").write_text(
         "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8"

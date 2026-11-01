@@ -29,7 +29,7 @@ _NUMBER = re.compile(
     r"\d{1,3}(?:['’]\d{3})+(?:[.,]\d+)?"  # Swiss
     r"|\d{1,3}(?:\.\d{3}){2,}(?:,\d+)?|\d{1,3}\.\d{3},\d+"  # continental with dots
     r"|\d{1,3}(?:,\d{3})+(?:\.\d+)?"  # English
-    r"|\d{1,3}(?:[   ]\d{3})+(?:,\d+)?"  # continental with spaces
+    r"|\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d+)?"  # with spaces
     r"|\d+(?:[.,]\d+)?"  # plain
     r")"
     r"(?P<suffix>\s?(?:%|pct\b|percent\b|pour\s?cent\b|bps\b|bp\b|pb\b"
@@ -38,7 +38,8 @@ _NUMBER = re.compile(
 )
 
 _CURRENCY = re.compile(r"(CHF|EUR|USD|Fr\.|SFr|\$|€)", re.IGNORECASE)
-_VAR_CONTEXT = re.compile(r"c?var|confiance|confidence|niveau|level|quantile", re.IGNORECASE)
+_VAR_CONTEXT = re.compile(r"c?var|confiance|confidence|niveau|level|quantile|histor", re.IGNORECASE)
+_HYPHENS = re.compile(r"[\u2010\u2011]")  # typographic hyphens, as in "2026\u201110\u201130"
 
 _MULTIPLIERS = {
     "k": 1e3,
@@ -84,16 +85,21 @@ def _parse(num: str) -> tuple[float, int]:
 
 
 def extract_numbers(text: str) -> list[ExtractedNumber]:
+    text = _HYPHENS.sub("-", text)
     cleaned = _DATE.sub(lambda m: " " * len(m.group()), text)
     out: list[ExtractedNumber] = []
     for m in _NUMBER.finditer(cleaned):
         raw = m.group().strip()
-        value, decimals = _parse(m.group("num"))
         suffix = (m.group("suffix") or "").strip().lower().rstrip(".")
         suffix = re.sub(r"\s+", "", suffix)
+        num = m.group("num")
+        if suffix in _MULTIPLIERS and re.fullmatch(r"\d{1,3},\d{3}", num):
+            num = num.replace(",", ".")  # "3,735 M" is 3.735 million, not 3,735 million
+        value, decimals = _parse(num)
         sign = -1.0 if m.group("sign") in ("-", "−") else 1.0
         window = cleaned[max(0, m.start() - 12) : m.end() + 12]
         has_currency = bool(_CURRENCY.search(window))
+        wide = cleaned[max(0, m.start() - 30) : m.end() + 30]
 
         unit, scale = "number", 1.0
         if suffix in ("%", "pct", "percent", "pourcent"):
@@ -111,23 +117,29 @@ def extract_numbers(text: str) -> list[ExtractedNumber]:
         plain_int = is_int and m.group("num").isdigit()
         if plain_int and unit != "percent" and scale == 1.0 and 1900 <= value <= 2100:
             ignored = "year"  # even next to a currency: "30 Sep 2026, EUR"
-        elif unit == "number" and is_int and value < 100:
-            ignored = "small count"
+        elif plain_int and unit != "percent" and scale == 1.0 and value < 100:
+            ignored = "small count"  # also next to a currency: "(EUR, au 30 oct)"
         elif suffix == "m" and is_int and value in (1, 3, 6) and not has_currency:
             ignored = "period label"
-        elif unit == "percent" and value in (90, 95, 97.5, 99) and _VAR_CONTEXT.search(window):
+        elif unit == "percent" and value in (90, 95, 97.5, 99) and _VAR_CONTEXT.search(wide):
             ignored = "confidence level"
         out.append(ExtractedNumber(raw, sign * value * scale, decimals, unit, scale, ignored))
     return out
 
 
 def collect_values(payload: Any) -> list[float]:
-    """Every numeric value found (recursively) in tool outputs."""
+    """Every numeric value found (recursively) in tool outputs.
+
+    Numbers inside text fields count too, so that "S&P 500" in an instrument name is
+    grounded by the name returned by the tool.
+    """
     values: list[float] = []
     if isinstance(payload, bool):
         return values
     if isinstance(payload, int | float):
         values.append(float(payload))
+    elif isinstance(payload, str):
+        values.extend(n.value for n in extract_numbers(payload))
     elif isinstance(payload, dict):
         for v in payload.values():
             values.extend(collect_values(v))

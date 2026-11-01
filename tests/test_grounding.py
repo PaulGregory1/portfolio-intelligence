@@ -18,6 +18,8 @@ def values(text: str) -> list[float]:
         ("EUR 1.234.567,89", 1234567.89),
         ("1 234 567,89 €", 1234567.89),
         ("1 234 567,89 EUR", 1234567.89),
+        ("CHF 4\u202f494\u202f997.78", 4494997.78),
+        ("\u20111,29 %", -1.29),
         ("un rendement de 4,23 %", 4.23),
         ("a return of 4.23%", 4.23),
         ("down -3.25%", -3.25),
@@ -29,6 +31,7 @@ def values(text: str) -> list[float]:
         ("1.2 Mrd", 1_200_000_000),
         ("2.5 bn", 2_500_000_000),
         ("12.5k", 12_500),
+        ("+3,735 M EUR", 3_735_000),
         ("549 bps", 5.49),
         ("25 pb", 0.25),
         ("0.135", 0.135),
@@ -58,6 +61,9 @@ def test_number_formats(text: str, expected: float) -> None:
         "99% CVaR",
         "2026-09",
         "(30 Jun 2026 → 30 Sep 2026, EUR)",
+        "as of 2026\u201110\u201130",
+        "(Thomas Weber – EUR, au 30 oct 2026)",
+        "The 1\u2011day 95 % historical VaR",
     ],
 )
 def test_non_financial_numbers_are_ignored(text: str) -> None:
@@ -74,8 +80,13 @@ def test_mixed_sentence() -> None:
 
 
 def test_collect_values_walks_nested_outputs() -> None:
-    payload = [{"a": 1, "b": {"c": [2.5, {"d": -3}]}, "flag": True, "s": "4.5"}]
-    assert collect_values(payload) == [1.0, 2.5, -3.0]
+    payload = [{"a": 1, "b": {"c": [2.5, {"d": -3}]}, "flag": True, "s": "S&P 500 at 4.5"}]
+    assert collect_values(payload) == [1.0, 2.5, -3.0, 500.0, 4.5]
+
+
+def test_numbers_in_tool_text_fields_are_grounded() -> None:
+    tools = [{"name": "SPDR S&P 500 ETF Trust", "weight_pct": 15.9}]
+    assert check_grounding("SPY (S&P 500) weighs 15.9%.", tools).grounding_rate == 1.0
 
 
 TOOL_OUTPUT = [
@@ -131,3 +142,11 @@ def test_answer_without_numbers_has_no_rate() -> None:
     report = check_grounding("Ce client n'est pas dans votre portefeuille.", TOOL_OUTPUT)
     assert report.grounding_rate is None
     assert report.to_dict()["checked"] == 0
+
+
+def test_numbers_from_the_question_are_grounded(data: object) -> None:
+    from pi.agent.trace import Trace
+
+    trace = Trace(question="Where will the S&P 500 be next year?", banker_id="B1", model="m")
+    report = check_grounding("I cannot forecast the S&P 500.", trace.grounding_sources())
+    assert report.ungrounded_values == []
