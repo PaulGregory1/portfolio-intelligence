@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     llm_max_concurrency: int = 2
     llm_timeout_s: float = 60.0
     llm_max_retries: int = 5
+    llm_max_tokens: int = 2048
+    # Price in USD per million tokens, for cost estimates in evaluation reports. The NVIDIA
+    # API catalog is free for prototyping, hence 0 by default; set them for paid endpoints.
+    llm_price_input_per_mtok: float = 0.0
+    llm_price_output_per_mtok: float = 0.0
 
     # Local storage.
     data_dir: Path = Path("data")
