@@ -289,3 +289,24 @@ def eval_compare(
     console.print(table, markup=False)
     if out:
         out.write_text(table, encoding="utf-8")
+
+
+@eval_app.command("rescore")
+def eval_rescore(
+    runs: list[Path] = typer.Argument(..., help="Run directories to rescore."),
+    dataset: Path = typer.Option(Path(DEFAULT_DATASET), help="Dataset used by the runs."),
+) -> None:
+    """Recompute scores, grounding and reports of finished runs from their saved traces."""
+    from pi.data.store import PortfolioData
+    from pi.evals.dataset import load_dataset
+    from pi.evals.report import fmt
+    from pi.evals.runner import rescore
+
+    settings = get_settings()
+    items = load_dataset(dataset)
+    data = PortfolioData.load(settings.db_path)
+    for run in runs:
+        summary = rescore(
+            items, data, run, settings.llm_price_input_per_mtok, settings.llm_price_output_per_mtok
+        )
+        console.print(f"{run}: success {fmt(summary['overall']['success_rate'], 'pct')}")

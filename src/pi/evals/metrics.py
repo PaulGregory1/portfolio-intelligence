@@ -48,9 +48,17 @@ def value_found(expected: ExpectedValue, answer: str) -> bool:
     return False
 
 
+_SEPARATORS = re.compile(r"[\s_\-\u2010-\u2015\u00a0\u202f]+")
+
+
+def _fold(text: str) -> str:
+    """Lowercase and unify separators: "Fixed‑income" (U+2011), "fixed_income", "fixed income"."""
+    return _SEPARATORS.sub(" ", text.lower())
+
+
 def mention_found(alternatives: list[str], answer: str) -> bool:
-    low = answer.lower()
-    return any(alt.lower() in low for alt in alternatives)
+    folded = _fold(answer)
+    return any(_fold(alt) in folded for alt in alternatives)
 
 
 def tool_scores(expected: list[str], called: list[str]) -> tuple[float | None, float | None]:

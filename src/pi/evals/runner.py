@@ -18,6 +18,7 @@ from typing import Any
 
 from pi.agent.grounding import check_grounding
 from pi.agent.loop import Agent, AgentConfig
+from pi.agent.trace import Trace
 from pi.data.store import PortfolioData
 from pi.evals.dataset import EvalItem
 from pi.evals.metrics import aggregate, score_item
@@ -55,6 +56,24 @@ def completed_ids(results: Path) -> set[str]:
     return ids
 
 
+def result_row(item: EvalItem, trace: Trace, data: PortfolioData) -> dict[str, Any]:
+    owners = {cid: c.banker_id for cid, c in data.clients.items()}
+    score = score_item(item, trace, owners)
+    return {
+        **score.to_dict(),
+        "question": item.question,
+        "banker_id": item.banker_id,
+        "language": item.language,
+        "answer": trace.answer,
+        "tools_called": trace.tools_called,
+        "expected_tools": item.expected_tools,
+        "expected_values": [v.__dict__ for v in item.expected_values],
+        "ungrounded": (trace.grounding or {}).get("ungrounded", []),
+        "trace_id": trace.run_id,
+        "error": trace.error,
+    }
+
+
 def run_item(
     item: EvalItem, llm: ChatModel, data: PortfolioData, traces_dir: Path
 ) -> dict[str, Any]:
@@ -62,21 +81,40 @@ def run_item(
     agent = Agent(llm, registry, ctx, config=AgentConfig(), grounder=check_grounding)
     result = agent.run(item.question)
     result.trace.save(traces_dir)
-    owners = {cid: c.banker_id for cid, c in data.clients.items()}
-    score = score_item(item, result.trace, owners)
-    return {
-        **score.to_dict(),
-        "question": item.question,
-        "banker_id": item.banker_id,
-        "language": item.language,
-        "answer": result.answer,
-        "tools_called": result.trace.tools_called,
-        "expected_tools": item.expected_tools,
-        "expected_values": [v.__dict__ for v in item.expected_values],
-        "ungrounded": (result.trace.grounding or {}).get("ungrounded", []),
-        "trace_id": result.trace.run_id,
-        "error": result.trace.error,
-    }
+    return result_row(item, result.trace, data)
+
+
+def rescore(
+    items: list[EvalItem],
+    data: PortfolioData,
+    out: Path,
+    price_in: float = 0.0,
+    price_out: float = 0.0,
+) -> dict[str, Any]:
+    """Recompute every score of a finished run from its saved traces, without calling a model.
+
+    Used after a fix in the metrics or the grounding check: the answers stay the same.
+    """
+    by_id = {item.id: item for item in items}
+    traces = {}
+    for path in (out / "traces").glob("*.json"):
+        trace = Trace.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        traces[trace.run_id] = trace
+    rows = []
+    for old in load_results(out / "results.jsonl"):
+        trace = traces[old["trace_id"]]
+        trace.grounding = check_grounding(trace.answer, trace.tool_outputs()).to_dict()
+        rows.append(result_row(by_id[old["id"]], trace, data))
+    (out / "results.jsonl").write_text(
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8"
+    )
+    summary = summarise(rows, price_in, price_out)
+    summary["model"] = json.loads((out / "config.json").read_text())["model"]
+    (out / "summary.json").write_text(json.dumps(summary, indent=2))
+    from pi.evals.report import write_report
+
+    write_report(out, summary, rows)
+    return summary
 
 
 def run_eval(

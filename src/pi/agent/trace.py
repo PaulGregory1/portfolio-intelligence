@@ -84,6 +84,13 @@ class Trace:
         )
         return data
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Trace:
+        fields = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
+        fields["llm_steps"] = [LLMStep(**s) for s in data.get("llm_steps", [])]
+        fields["tool_steps"] = [ToolStep(**s) for s in data.get("tool_steps", [])]
+        return cls(**fields)
+
     def save(self, directory: Path) -> Path:
         directory.mkdir(parents=True, exist_ok=True)
         stamp = self.started_at[:19].replace(":", "").replace("-", "")

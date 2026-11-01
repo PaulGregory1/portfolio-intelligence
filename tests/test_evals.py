@@ -190,3 +190,31 @@ def test_run_eval_end_to_end_and_resume(
 
     table = compare_runs([out, out])
     assert "| Success rate |" in table and "## Success rate by category" in table
+
+
+def test_mentions_ignore_separator_variants() -> None:
+    from pi.evals.metrics import mention_found
+
+    alternatives = ["fixed income", "bond"]
+    assert mention_found(alternatives, "The **fixed‑income** sleeve")  # U+2011
+    assert mention_found(alternatives, "| fixed_income | -0.11 % |")
+    assert mention_found(alternatives, "Fixed-Income")
+    assert not mention_found(alternatives, "equity")
+
+
+def test_rescore_reproduces_scores_from_traces(
+    items: list[EvalItem], data: PortfolioData, tmp_path: Path
+) -> None:
+    from pi.evals.runner import rescore
+
+    subset = [i for i in items if i.category in ("access_control", "lookup")][:4]
+    config = RunConfig(
+        model="fake-model",
+        base_url="http://fake",
+        dataset=Path("x"),
+        out_dir=tmp_path,
+        concurrency=1,
+    )
+    before = run_eval(subset, data, config, lambda _: CountingLLM())
+    after = rescore(subset, data, tmp_path)
+    assert after["overall"] == before["overall"]
