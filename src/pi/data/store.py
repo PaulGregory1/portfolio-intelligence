@@ -73,6 +73,7 @@ class PortfolioData:
         tx = tables["transactions"].copy()
         tx["date"] = pd.to_datetime(tx["date"])
         self.transactions = tx
+        self._prices_in: dict[str, pd.DataFrame] = {}
 
     @classmethod
     def load(cls, path: Path) -> PortfolioData:
@@ -114,11 +115,13 @@ class PortfolioData:
         return out
 
     def prices_in(self, currency: str) -> pd.DataFrame:
-        """Price matrix converted into `currency`."""
-        rates = pd.DataFrame(
-            {t: self.fx[i.currency] / self.fx[currency] for t, i in self.instruments.items()}
-        )
-        return self.prices * rates[self.prices.columns]
+        """Price matrix converted into `currency` (memoised)."""
+        if currency not in self._prices_in:
+            rates = pd.DataFrame(
+                {t: self.fx[i.currency] / self.fx[currency] for t, i in self.instruments.items()}
+            )
+            self._prices_in[currency] = self.prices * rates[self.prices.columns]
+        return self._prices_in[currency]
 
     def client_transactions(self, client_id: str) -> pd.DataFrame:
         return self.transactions[self.transactions["client_id"] == client_id]
