@@ -108,8 +108,9 @@ def extract_numbers(text: str) -> list[ExtractedNumber]:
 
         ignored = None
         is_int = decimals == 0
-        if unit == "number" and is_int and 1900 <= value <= 2100:
-            ignored = "year"
+        plain_int = is_int and m.group("num").isdigit()
+        if plain_int and unit != "percent" and scale == 1.0 and 1900 <= value <= 2100:
+            ignored = "year"  # even next to a currency: "30 Sep 2026, EUR"
         elif unit == "number" and is_int and value < 100:
             ignored = "small count"
         elif suffix == "m" and is_int and value in (1, 3, 6) and not has_currency:

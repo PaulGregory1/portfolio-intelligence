@@ -57,6 +57,7 @@ def test_number_formats(text: str, expected: float) -> None:
         "VaR 95% à 1 jour",
         "99% CVaR",
         "2026-09",
+        "(30 Jun 2026 → 30 Sep 2026, EUR)",
     ],
 )
 def test_non_financial_numbers_are_ignored(text: str) -> None:
