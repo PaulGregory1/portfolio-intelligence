@@ -44,3 +44,30 @@ def data_generate(
     console.print(table)
     n_syn = len(data.synthetic_tickers)
     console.print(f"Synthetic price series: {n_syn}/{len(data.instruments)} instruments.")
+
+
+@app.command()
+def models(
+    filter: str = typer.Option("", "--filter", "-f", help="Only show ids containing this text."),
+) -> None:
+    """List the models served by the configured LLM endpoint (GET /models)."""
+    from openai import OpenAI
+
+    settings = get_settings()
+    client = OpenAI(base_url=settings.llm_base_url, api_key=settings.llm_api_key.get_secret_value())
+    ids = sorted(m.id for m in client.models.list())
+    for model_id in ids:
+        if filter.lower() in model_id.lower():
+            marker = "  <- LLM_MODEL" if model_id == settings.llm_model else ""
+            console.print(f"{model_id}{marker}")
+
+
+@app.command()
+def mcp(
+    banker: str = typer.Option(..., "--banker", "-b", help="Banker whose book is exposed."),
+) -> None:
+    """Serve the portfolio tools over MCP (stdio) for the given banker."""
+    from pi.data.store import PortfolioData
+    from pi.mcp_server import build_server
+
+    build_server(PortfolioData.load(get_settings().db_path), banker).run("stdio")
