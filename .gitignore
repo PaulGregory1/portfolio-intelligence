@@ -1,0 +1,13 @@
+PLAN.md
+.env
+.venv/
+__pycache__/
+*.pyc
+.cache/
+runs/
+data/*.duckdb
+data/raw/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
