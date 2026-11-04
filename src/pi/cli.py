@@ -80,6 +80,28 @@ def mcp(
     build_server(PortfolioData.load(get_settings().db_path), banker).run("stdio")
 
 
+@app.command()
+def ui(
+    host: str = typer.Option("127.0.0.1", help="Interface to bind."),
+    port: int = typer.Option(8000, help="Port."),
+    cache: bool = typer.Option(False, help="Use the on-disk LLM response cache."),
+) -> None:
+    """Web interface: book, assistant with live tool trace, and model evaluation results."""
+    import uvicorn
+
+    from pi.data.store import PortfolioData
+    from pi.web.app import create_app
+
+    settings = get_settings()
+    console.print(f"Portfolio Intelligence UI on [bold]http://{host}:{port}[/bold]")
+    uvicorn.run(
+        create_app(settings, PortfolioData.load(settings.db_path), use_cache=cache),
+        host=host,
+        port=port,
+        log_level="warning",
+    )
+
+
 def _event_printer(verbose: bool) -> Callable[[str, dict[str, Any]], None]:
     def on_event(kind: str, payload: dict[str, Any]) -> None:
         if kind == "tool_call":

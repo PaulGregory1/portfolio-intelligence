@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+/* Editorial palette in the spirit of the Financial Times: paper, ink, oxford blue, claret. */
+:root {
+  --paper: #fff1e5;
+  --paper-2: #f2dfce;
+  --card: #fff7ef;
+  --ink: #33302e;
+  --ink-2: #4d4845;
+  --muted: #807973;
+  --faint: #a69f99;
+  --rule: #ccc1b7;
+  --rule-2: #e6d9ce;
+  --blue: #0f5499;
+  --blue-soft: #dde4ee;
+  --claret: #990f3d;
+  --claret-soft: #f3dfe0;
+  --pos: #09783d;
+  --neg: #cc0000;
+  --warn: #96510a;
+  --m0: var(--blue);
+  --m1: var(--claret);
+  --eq: #0f5499;
+  --fi: #7aa0cf;
+  --alt: #990f3d;
+  --cash: #ccc1b7;
+  --serif: "Source Serif 4", Georgia, serif;
+  --sans: "Libre Franklin", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 14px/1.5 var(--sans); font-variant-numeric: tabular-nums lining-nums;
+  -webkit-font-smoothing: antialiased;
+}
+button, select, textarea, input { font: inherit; color: inherit; }
+code { font-family: var(--mono); }
+.pos { color: var(--pos); } .neg { color: var(--neg); }
+
+/* label above a block: thick ink rule, small caps text */
+.kicker {
+  border-top: 4px solid var(--ink); padding-top: 6px;
+  font: 700 11px/1.3 var(--sans); letter-spacing: .08em; text-transform: uppercase;
+  display: flex; justify-content: space-between; gap: 10px;
+}
+.kicker span:last-child { font-weight: 500; letter-spacing: .02em; text-transform: none; color: var(--muted); }
+
+/* ---- shell ---------------------------------------------------------------- */
+.app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+header { display: flex; align-items: stretch; gap: 32px; padding: 0 24px; border-bottom: 1px solid var(--rule); background: var(--paper); }
+.brand { display: flex; align-items: baseline; gap: 10px; padding: 14px 0 12px; }
+.brand b { font: 600 22px/1 var(--serif); letter-spacing: -.01em; }
+.brand small { font-size: 12px; color: var(--muted); }
+nav { display: flex; gap: 22px; }
+nav button {
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted);
+  font-weight: 600; font-size: 13px; border-bottom: 3px solid transparent; margin-bottom: -1px;
+}
+nav button.active { color: var(--ink); border-bottom-color: var(--claret); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--muted); }
+.field { display: flex; align-items: center; gap: 6px; }
+.field select {
+  background: var(--card); border: 1px solid var(--rule); border-radius: 0; padding: 5px 24px 5px 8px;
+  appearance: none; cursor: pointer; color: var(--ink); font-weight: 500;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' stroke='%2333302e' fill='none' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.view { display: none; min-height: 0; }
+.view.active { display: grid; }
+
+/* ---- assistant ------------------------------------------------------------ */
+#assistant { grid-template-columns: 270px minmax(0, 1fr) 340px; min-height: 0; }
+.side { min-height: 0; display: flex; flex-direction: column; padding: 18px 18px 0; }
+.book { border-right: 1px solid var(--rule); }
+.trace { border-left: 1px solid var(--rule); }
+.scroll { overflow-y: auto; min-height: 0; flex: 1; }
+.banker-line { font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+.banker-line b { color: var(--ink); font-weight: 600; }
+
+.client { padding: 12px 0; border-bottom: 1px solid var(--rule-2); cursor: pointer; }
+.client:hover .client-name { color: var(--blue); }
+.client-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.client-name { font: 600 15px/1.25 var(--serif); }
+.client-meta { font-size: 11.5px; color: var(--muted); margin: 2px 0 8px; text-transform: capitalize; }
+.client-figs { display: grid; grid-template-columns: 1fr auto; align-items: end; }
+.aum { font: 600 18px/1.1 var(--serif); }
+.aum small { font: 500 11px var(--sans); color: var(--muted); margin-right: 3px; }
+.ytd { text-align: right; font-size: 12px; line-height: 1.35; }
+.alloc { display: flex; height: 5px; margin-top: 9px; gap: 1px; }
+.legend { display: flex; justify-content: space-between; padding: 10px 0 14px; font-size: 10.5px; color: var(--muted); border-top: 1px solid var(--rule); }
+.legend i { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: -.5px; }
+
+/* conversation */
+.chat { display: flex; flex-direction: column; min-height: 0; }
+.messages { flex: 1; overflow-y: auto; padding: 22px 28px 8px; min-height: 0; }
+.turn { max-width: 860px; margin: 0 auto 30px; }
+.q-label { font-size: 11.5px; color: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.q-label b { color: var(--claret); }
+.q { font: 400 23px/1.25 var(--serif); margin: 4px 0 14px; letter-spacing: -.005em; }
+.blocks { display: grid; gap: 12px; cursor: pointer; }
+.turn.selected .blocks > .box:first-child { outline: 2px solid var(--blue); outline-offset: -1px; }
+.box { background: var(--card); border: 1px solid var(--rule); }
+.box-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 9px 14px 8px; border-bottom: 1px solid var(--rule-2);
+  font: 700 11px/1.3 var(--sans); letter-spacing: .07em; text-transform: uppercase; color: var(--ink);
+}
+.box-head small { font-weight: 500; letter-spacing: .02em; text-transform: none; color: var(--muted); font-size: 11.5px; }
+.box-body { padding: 11px 14px; }
+details.box > summary { list-style: none; cursor: pointer; }
+details.box > summary::-webkit-details-marker { display: none; }
+details.box > summary .box-head { border-bottom-color: transparent; }
+details.box[open] > summary .box-head { border-bottom-color: var(--rule-2); }
+details.box > summary .box-head::after { content: "Show"; font-weight: 600; letter-spacing: .02em; text-transform: none; color: var(--blue); font-size: 12px; }
+details.box[open] > summary .box-head::after { content: "Hide"; }
+.figs { display: grid; grid-template-columns: repeat(4, 1fr); }
+.fig { padding: 11px 14px; border-right: 1px solid var(--rule-2); }
+.fig:last-child { border-right: 0; }
+.fig-l { font-size: 11.5px; color: var(--muted); }
+.fig-v { font: 600 24px/1.15 var(--serif); letter-spacing: -.01em; }
+.md p { margin: 0 0 8px; }
+.md ul, .md ol { margin: 0 0 8px; padding-left: 18px; }
+.md li { margin: 2px 0; }
+.md > :last-child { margin-bottom: 0; }
+.md strong { font-weight: 600; }
+.md table { border-collapse: collapse; width: 100%; font-size: 12.5px; display: block; overflow-x: auto; }
+.md th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11.5px; border-bottom: 1px solid var(--ink); }
+.md th, .md td { padding: 5px 8px; }
+.md td { border-bottom: 1px solid var(--rule-2); }
+.md tr:last-child td { border-bottom: 0; }
+.md td:not(:first-child), .md th:not(:first-child) { text-align: right; }
+.md code { font-size: 12px; }
+mark.g { background: none; color: inherit; border-bottom: 1px dotted var(--pos); }
+mark.g.bad { border-bottom: 2px solid var(--neg); background: var(--claret-soft); }
+.turn-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); padding-top: 2px; }
+.turn-foot .model { margin-left: auto; }
+.status { font-weight: 700; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
+.status.ok { color: var(--pos); } .status.warn { color: var(--warn); } .status.bad { color: var(--neg); } .status.run { color: var(--blue); }
+.status.run::after { content: "…"; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.live-step { display: flex; gap: 10px; align-items: baseline; padding: 2px 0; font-size: 12.5px; color: var(--muted); }
+.live-step code { color: var(--ink); font-size: 12px; }
+.live-step .t { width: 44px; color: var(--faint); }
+
+.empty { max-width: 680px; margin: 7vh auto 0; }
+.empty h2 { font: 400 30px/1.2 var(--serif); margin: 0 0 8px; }
+.empty p { color: var(--muted); margin: 0 0 22px; }
+.suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.suggestion { padding: 10px 14px 12px; cursor: pointer; font: 400 15px/1.35 var(--serif); }
+.suggestion:hover { border-color: var(--ink); }
+.suggestion span { display: block; font: 700 10.5px var(--sans); color: var(--claret); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .08em; }
+
+.composer { padding: 10px 28px 16px; }
+.composer form { max-width: 860px; margin: 0 auto; display: flex; border: 1px solid var(--ink); background: var(--card); }
+.composer textarea { flex: 1; border: 0; outline: 0; resize: none; background: none; padding: 11px 14px; max-height: 140px; line-height: 1.45; }
+.send { border: 0; background: var(--ink); color: var(--paper); padding: 0 20px; font-weight: 600; cursor: pointer; }
+.send:disabled { opacity: .4; cursor: default; }
+.hint { max-width: 860px; margin: 6px auto 0; font-size: 11.5px; color: var(--faint); display: flex; justify-content: space-between; }
+
+/* trace */
+.trace-empty { padding: 14px 0; color: var(--muted); font-size: 12.5px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
+.stat { padding: 9px 0 10px; }
+.stat:nth-child(n+4) { border-top: 1px solid var(--rule-2); }
+.stat-l { font-size: 11px; color: var(--muted); }
+.stat-v { font: 600 18px/1.2 var(--serif); }
+.steps { margin: 8px 0 18px; }
+.step { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 6px 0; border-bottom: 1px solid var(--rule-2); font-size: 12.5px; }
+.step.llm { color: var(--muted); }
+.step .n { font-family: var(--mono); font-size: 12px; color: var(--blue); font-weight: 500; }
+.step.err .n { color: var(--neg); }
+.step .t { color: var(--faint); font-size: 11.5px; text-align: right; }
+.step .args { grid-column: 1 / -1; font-family: var(--mono); font-size: 10.5px; color: var(--muted); word-break: break-all; }
+.step details { grid-column: 1 / -1; }
+.step summary { font-size: 11.5px; color: var(--blue); cursor: pointer; font-weight: 500; }
+.step pre { margin: 6px 0 2px; padding: 8px; background: var(--card); border: 1px solid var(--rule-2); font: 10.5px/1.5 var(--mono); max-height: 240px; overflow: auto; }
+.grounding-sum { display: flex; justify-content: space-between; font-size: 12.5px; padding: 8px 0 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0 12px; }
+.chip { font: 10.5px var(--mono); padding: 1px 5px; border: 1px solid var(--rule); color: var(--faint); }
+.chip.ok { color: var(--pos); border-color: #9fcfb2; }
+.chip.bad { color: var(--neg); border-color: #e6a3a3; }
+details.more summary { font-size: 12px; color: var(--blue); cursor: pointer; font-weight: 500; padding-bottom: 6px; }
+.access { font-size: 12.5px; padding: 8px 0 16px; }
+
+/* ---- evaluation ------------------------------------------------------------ */
+#evaluation { overflow-y: auto; }
+.eval { max-width: 1200px; margin: 0 auto; padding: 26px 28px 40px; width: 100%; }
+.eval h1 { font: 400 32px/1.15 var(--serif); margin: 0 0 6px; }
+.eval .lede { color: var(--ink-2); margin: 0 0 22px; max-width: 760px; font-size: 14.5px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 26px; }
+.model-name { display: flex; align-items: center; gap: 8px; font: 600 19px/1.2 var(--serif); margin: 10px 0 2px; }
+.swatch { width: 12px; height: 12px; flex: none; display: inline-block; }
+.model-slug { font: 11px var(--mono); color: var(--muted); margin-bottom: 12px; }
+.model-figs { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--rule); }
+.model-figs > div { padding: 10px 0; }
+.model-figs .v { font: 600 26px/1.1 var(--serif); }
+.model-figs .l { font-size: 11.5px; color: var(--muted); }
+.chart .sub { font-size: 12px; color: var(--muted); margin: 6px 0 10px; }
+.bars-legend { display: flex; gap: 16px; font-size: 11.5px; color: var(--muted); margin-bottom: 10px; }
+.bars-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 116px 1fr; gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--rule-2); }
+.bar-label { font-size: 12.5px; }
+.bar-label small { color: var(--faint); }
+.bar-pair { display: flex; flex-direction: column; gap: 2px; }
+.bar { display: flex; align-items: center; gap: 6px; height: 10px; }
+.bar i { display: block; height: 100%; min-width: 2px; }
+.bar b { font-weight: 500; font-size: 10.5px; color: var(--muted); }
+table.metrics { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+table.metrics th, table.metrics td { padding: 7px 0; border-bottom: 1px solid var(--rule-2); }
+table.metrics th { text-align: left; font-size: 11.5px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--ink); }
+table.metrics td:not(:first-child), table.metrics th:not(:first-child) { text-align: right; width: 24%; }
+table.metrics td.best { font-weight: 700; }
+table.metrics tr.group td { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--claret); padding-top: 16px; border-bottom-color: var(--rule); }
+.note { font-size: 12px; color: var(--muted); margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><b>Portfolio Intelligence</b><small>Private Banking</small></div>
+    <nav>
+      <button data-view="assistant" class="active">Assistant</button>
+      <button data-view="evaluation">Model evaluation</button>
+    </nav>
+    <div class="header-right">
+      <label class="field">Banker <select id="banker"></select></label>
+      <label class="field">Model <select id="model"></select></label>
+      <span id="asof"></span>
+    </div>
+  </header>
+
+  <main id="assistant" class="view active">
+    <aside class="side book">
+      <div class="kicker"><span>Client book</span><span id="book-count"></span></div>
+      <div class="banker-line" id="banker-card"></div>
+      <div class="scroll" id="clients"></div>
+      <div class="legend">
+        <span><i style="background:var(--eq)"></i>Equity</span>
+        <span><i style="background:var(--fi)"></i>Fixed income</span>
+        <span><i style="background:var(--alt)"></i>Alternatives</span>
+        <span><i style="background:var(--cash)"></i>Cash</span>
+      </div>
+    </aside>
+
+    <section class="chat">
+      <div class="messages" id="messages"></div>
+      <div class="composer">
+        <form id="ask-form">
+          <textarea id="question" rows="1" placeholder="Ask about a client portfolio: performance, attribution, risk, benchmark, screening..."></textarea>
+          <button class="send" id="send" type="submit">Ask</button>
+        </form>
+        <div class="hint"><span>Every figure is checked against the analytics engine.</span><span>Enter to send · Shift+Enter for a new line</span></div>
+      </div>
+    </section>
+
+    <aside class="side trace">
+      <div class="kicker"><span>Execution trace</span><span id="trace-id"></span></div>
+      <div class="scroll" id="trace"></div>
+    </aside>
+  </main>
+
+  <main id="evaluation" class="view"><div class="eval" id="eval"></div></main>
+</div>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const state = { meta: null, banker: null, book: null, turns: [], selected: null, busy: false };
+const CATEGORY_LABELS = {
+  lookup: "Lookup", performance: "Performance", attribution: "Attribution", risk: "Risk",
+  benchmark: "Benchmark", screening: "Screening", multi_step: "Multi-step",
+  access_control: "Access control", out_of_scope: "Out of scope",
+};
+const ALLOC = [["equity", "--eq"], ["fixed_income", "--fi"], ["alternatives", "--alt"], ["cash", "--cash"]];
+const TRACE_EMPTY = `<div class="trace-empty">Tool calls, timings and the grounding check of the selected answer.</div>`;
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtMoney = (v) => new Intl.NumberFormat("de-CH", { maximumFractionDigits: 0 }).format(v);
+const fmtCompact = (v) => v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : fmtMoney(v);
+const fmtPct = (v, d = 2) => (v > 0 ? "+" : "") + v.toFixed(d) + "%";
+const pct = (v, d = 0) => v == null ? "–" : (100 * v).toFixed(d) + "%";
+const signClass = (v) => v >= 0 ? "pos" : "neg";
+const prettyModel = (m) => (m || "").split("/").pop().split("-").map((w) =>
+  /^\d+(\.\d+)?$/.test(w) ? w : /^a?\d+b$/i.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)
+).join(" ").replace(/ (A\d+B)$/, "-$1");
+const fmtDate = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const status = (s) => {
+  const cls = s === "ok" ? "ok" : s === "ungrounded" ? "warn" : s === "running" ? "run" : "bad";
+  const label = { ok: "Grounded", ungrounded: "Ungrounded numbers", running: "Running" }[s] || s.replace(/_/g, " ");
+  return `<span class="status ${cls}">${esc(label)}</span>`;
+};
+const bankerName = () => state.meta.bankers.find((b) => b.id === state.banker)?.name || state.banker;
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res.json();
+}
+
+/* ---- book ---------------------------------------------------------------- */
+async function loadBook(banker) {
+  state.banker = banker;
+  $("#banker-card").innerHTML = `<b>${esc(bankerName())}</b> · relationship manager ${banker}`;
+  $("#clients").innerHTML = "";
+  state.book = await api(`/api/book/${banker}`);
+  $("#book-count").textContent = `${state.book.clients.length} clients`;
+  $("#clients").innerHTML = state.book.clients.map((c) => `
+    <div class="client" data-name="${esc(c.name)}">
+      <div class="client-top"><span class="client-name">${esc(c.name)}</span></div>
+      <div class="client-meta">${c.client_id} · ${esc(c.mandate)} · ${c.reference_currency}</div>
+      <div class="client-figs">
+        <div class="aum"><small>${c.reference_currency}</small>${fmtCompact(c.total_value)}</div>
+        <div class="ytd"><div>YTD ${fmtPct(c.ytd_pct)}</div>
+          <div class="${signClass(c.active_ytd_pct)}" title="Benchmark YTD ${fmtPct(c.benchmark_ytd_pct)}">${fmtPct(c.active_ytd_pct)} vs bench</div></div>
+      </div>
+      <div class="alloc">${ALLOC.map(([k, v]) => `<span style="width:${c.allocation_pct[k] || 0}%;background:var(${v})" title="${k} ${c.allocation_pct[k] || 0}%"></span>`).join("")}</div>
+    </div>`).join("");
+  document.querySelectorAll(".client").forEach((el) => el.addEventListener("click", () => {
+    $("#question").value = `Comment se comporte le portefeuille de ${el.dataset.name} cette année par rapport à son benchmark ?`;
+    $("#question").focus(); autosize();
+  }));
+  if (!state.turns.length) renderMessages();
+}
+
+/* ---- answer layout --------------------------------------------------------- */
+// Key figures are read from the tool outputs, never from the model's text.
+const FIGURES = {
+  get_performance: (r) => [["Return (TWR)", r.twr_pct], ["Benchmark", r.benchmark_return_pct], ["Active return", r.active_return_pct]],
+  get_attribution: (r) => [["Active return", r.active_return_pct], ["Selection", r.selection_pct], ["Allocation", r.allocation_pct], ["Fees", r.fees_pct]],
+  compare_to_benchmark: (r) => [["Return", r.portfolio_return_pct], ["Benchmark", r.benchmark_return_pct], ["Active return", r.portfolio_return_pct - r.benchmark_return_pct], ["Fees", r.fees_pct]],
+  get_risk_report: (r) => [["Volatility", r.volatility_pct, false], ["VaR 95% 1d", r.var_95_1d_pct, false], ["Max drawdown", r.max_drawdown_pct], ["Tracking error", r.tracking_error_pct, false]],
+};
+
+function keyFigures(t) {
+  const seen = new Map();
+  let ctx = null;
+  for (const s of t.tool_steps) {
+    const make = FIGURES[s.name];
+    if (!s.ok || !make) continue;
+    ctx = ctx || [s.result.client_id, s.result.period?.label].filter(Boolean).join(" · ");
+    for (const [label, value, signed = true] of make(s.result)) {
+      if (value != null && !seen.has(label)) seen.set(label, [value, signed]);
+    }
+  }
+  if (!seen.size) return "";
+  const figs = [...seen].slice(0, 4).map(([label, [v, signed]]) =>
+    `<div class="fig"><div class="fig-l">${label}</div><div class="fig-v ${signed ? signClass(v) : ""}">${signed ? fmtPct(v) : v.toFixed(2) + "%"}</div></div>`).join("");
+  return `<section class="box"><div class="box-head">Key figures<small>${esc(ctx || "")}</small></div><div class="figs">${figs}</div></section>`;
+}
+
+// Split the rendered markdown into titled blocks: one per heading (or bold-only line).
+function sections(html) {
+  const root = document.createElement("div");
+  root.innerHTML = html;
+  const out = [{ title: "Summary", nodes: [] }];
+  for (const node of [...root.childNodes]) {
+    if (node.nodeType === 3 && !node.textContent.trim()) continue;
+    const boldTitle = node.tagName === "P" && node.children.length === 1 && node.firstElementChild.tagName === "STRONG"
+      && node.textContent.trim() === node.firstElementChild.textContent.trim();
+    if (/^H[1-6]$/.test(node.tagName) || boldTitle) {
+      out.push({ title: node.textContent.trim().replace(/\s*:$/, ""), nodes: [] });
+    } else {
+      out.at(-1).nodes.push(node);
+    }
+  }
+  return out.filter((s) => s.nodes.length);
+}
+
+function highlightNumbers(root, grounding) {
+  const nums = (grounding?.numbers || []).filter((n) => !n.ignored);
+  if (!nums.length) return;
+  const byRaw = new Map(nums.map((n) => [n.raw, n]));
+  const raws = [...byRaw.keys()].sort((a, b) => b.length - a.length).map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`(${raws.join("|")})`, "g");
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    if (!node.nodeValue.match(re)) continue;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    for (const m of node.nodeValue.matchAll(re)) {
+      frag.append(node.nodeValue.slice(last, m.index));
+      const n = byRaw.get(m[0]);
+      const mark = document.createElement("mark");
+      mark.className = "g" + (n.grounded ? "" : " bad");
+      mark.title = n.grounded ? `Grounded: matches tool value ${n.matched_value}` : "Not found in any tool output";
+      mark.textContent = m[0];
+      frag.append(mark);
+      last = m.index + m[0].length;
+    }
+    frag.append(node.nodeValue.slice(last));
+    node.replaceWith(frag);
+  }
+}
+
+function answerBlocks(t) {
+  const wrap = document.createElement("div");
+  wrap.className = "blocks";
+  wrap.innerHTML = keyFigures(t);
+  sections(DOMPurify.sanitize(marked.parse(t.answer || ""))).forEach((s, i) => {
+    // The summary and tables stay open; longer explanations are folded.
+    const open = i === 0 || s.nodes.some((n) => n.tagName === "TABLE");
+    const box = document.createElement(open ? "section" : "details");
+    box.className = "box";
+    const head = `<div class="box-head">${esc(s.title)}</div>`;
+    box.innerHTML = open ? head : `<summary>${head}</summary>`;
+    const body = document.createElement("div");
+    body.className = "box-body md";
+    body.append(...s.nodes);
+    highlightNumbers(body, t.grounding);
+    box.append(body);
+    wrap.append(box);
+  });
+  return wrap;
+}
+
+/* ---- conversation -------------------------------------------------------- */
+function suggestions() {
+  const cs = state.book?.clients || [];
+  const big = [...cs].sort((a, b) => b.total_value - a.total_value)[0];
+  const other = cs.find((c) => c !== big) || big;
+  if (!big) return [];
+  return [
+    ["Attribution", `Pourquoi le portefeuille de ${big.name} a sous-performé au T3 2026 ?`],
+    ["Risk", `What is the 1-day 95% VaR and the max drawdown of ${other.name}?`],
+    ["Benchmark", `Compare ${other.name} to its benchmark year to date, by asset class.`],
+    ["Screening", "Find low-cost ESG equity ETFs with a TER below 0.20%."],
+  ];
+}
+
+function renderMessages() {
+  const box = $("#messages");
+  if (!state.turns.length) {
+    box.innerHTML = `<div class="empty"><div class="kicker"><span>Assistant</span><span></span></div>
+      <h2>Ask about your clients' portfolios</h2>
+      <p>Performance, Brinson attribution, risk and screening come from a deterministic analytics engine; every figure in the answer is checked against it.</p>
+      <div class="suggestions">${suggestions().map(([k, q]) => `<div class="box suggestion" data-q="${esc(q)}"><span>${k}</span>${esc(q)}</div>`).join("")}</div></div>`;
+    box.querySelectorAll(".suggestion").forEach((el) => el.addEventListener("click", () => ask(el.dataset.q)));
+    return;
+  }
+  box.innerHTML = "";
+  state.turns.forEach((turn, i) => {
+    const t = turn.trace;
+    const el = document.createElement("article");
+    el.className = "turn" + (state.selected === i && t ? " selected" : "");
+    el.innerHTML = `<div class="q-label"><b>Question</b> · ${esc(bankerName())}</div><h2 class="q">${esc(turn.question)}</h2>`;
+    if (!t) {
+      el.insertAdjacentHTML("beforeend", `<section class="box"><div class="box-head">${status("running")}</div>
+        <div class="box-body">${turn.live.map((s) => `<div class="live-step">${s}</div>`).join("") || `<div class="live-step">Thinking</div>`}</div></section>`);
+    } else {
+      const blocks = answerBlocks(t);
+      blocks.addEventListener("click", (e) => { if (e.target.closest("summary")) return; state.selected = i; renderMessages(); renderTrace(); });
+      el.append(blocks);
+      const g = t.grounding?.grounding_rate;
+      el.insertAdjacentHTML("beforeend", `<div class="turn-foot" style="margin-top:8px">${status(t.status)}
+        <span>${t.tool_steps.length} tool calls</span><span>${t.wall_time_s.toFixed(1)} s</span>
+        <span>${((t.prompt_tokens + t.completion_tokens) / 1000).toFixed(1)}k tokens</span>
+        <span>grounding ${g == null ? "n/a" : pct(g)}</span><span class="model">${esc(prettyModel(t.model))}</span></div>`);
+    }
+    box.append(el);
+  });
+}
+
+/* ---- trace ----------------------------------------------------------------- */
+function renderTrace(liveTurn) {
+  const turn = liveTurn || state.turns[state.selected];
+  const box = $("#trace");
+  if (!turn) { $("#trace-id").textContent = ""; box.innerHTML = TRACE_EMPTY; return; }
+  const t = turn.trace;
+  if (!t) {
+    $("#trace-id").textContent = "running";
+    box.innerHTML = `<div class="steps">${turn.events.map((e) => `<div class="step ${e.kind}"><span>${e.html}</span><span class="t">${e.time || ""}</span></div>`).join("")}</div>`;
+    return;
+  }
+  $("#trace-id").innerHTML = `<code>${t.run_id}</code>`;
+  const g = t.grounding;
+  const stats = [
+    ["Wall time", `${t.wall_time_s.toFixed(1)} s`], ["Model calls", t.iterations], ["Tool calls", t.tool_steps.length],
+    ["Tokens", fmtMoney(t.prompt_tokens + t.completion_tokens)], ["Grounding", g?.grounding_rate == null ? "n/a" : pct(g.grounding_rate)],
+    ["Status", status(t.status)],
+  ];
+  const steps = [];
+  for (const llm of t.llm_steps) {
+    steps.push(`<div class="step llm"><span>Model call ${llm.iteration}${llm.cached ? " (cached)" : ""}</span><span class="t">${llm.latency_s.toFixed(1)} s</span></div>`);
+    for (const s of t.tool_steps.filter((x) => x.iteration === llm.iteration)) {
+      const args = s.arguments ? JSON.stringify(s.arguments) : s.raw_arguments;
+      steps.push(`<div class="step tool ${s.ok ? "" : "err"}"><span class="n">${esc(s.name)}${s.ok ? "" : ` · ${esc(s.error_code)}`}</span><span class="t">${s.duration_ms.toFixed(0)} ms</span>
+        ${args && args !== "{}" ? `<div class="args">${esc(args)}</div>` : ""}
+        <details><summary>Output</summary><pre>${esc(JSON.stringify(s.result, null, 2))}</pre></details></div>`);
+    }
+  }
+  const checked = (g?.numbers || []).filter((n) => !n.ignored);
+  const chips = (g?.numbers || []).map((n) => {
+    const cls = n.ignored ? "" : n.grounded ? "ok" : "bad";
+    const title = n.ignored ? `ignored: ${n.ignored}` : n.grounded ? `matches ${n.matched_value}` : "not in any tool output";
+    return `<span class="chip ${cls}" title="${esc(title)}">${esc(n.raw)}</span>`;
+  }).join("");
+  const bad = checked.filter((n) => !n.grounded).length;
+  box.innerHTML = `
+    <div class="stats">${stats.map(([l, v]) => `<div class="stat"><div class="stat-l">${l}</div><div class="stat-v">${v}</div></div>`).join("")}</div>
+    <div class="kicker"><span>Steps</span><span>${esc(prettyModel(t.model))}</span></div>
+    <div class="steps">${steps.join("")}</div>
+    <div class="kicker"><span>Grounding check</span><span></span></div>
+    <div class="grounding-sum"><span>${checked.length - bad} of ${checked.length} figures found in tool outputs</span>${bad ? `<b class="neg">${bad} missing</b>` : `<b class="pos">all matched</b>`}</div>
+    ${chips ? `<details class="more"><summary>Show figures</summary><div class="chips">${chips}</div></details>` : ""}
+    <div class="kicker" style="margin-top:8px"><span>Access control</span><span></span></div>
+    <div class="access">Banker <b>${esc(t.banker_id)}</b> · clients accessed: <b>${esc(t.accessed_clients.join(", ") || "none")}</b></div>`;
+}
+
+/* ---- ask ------------------------------------------------------------------- */
+async function ask(question) {
+  question = question.trim();
+  if (!question || state.busy) return;
+  state.busy = true; $("#send").disabled = true;
+  $("#question").value = ""; autosize();
+  const history = state.turns.filter((t) => t.trace).flatMap((t) => [
+    { role: "user", content: t.question }, { role: "assistant", content: t.trace.answer },
+  ]);
+  const turn = { question, trace: null, live: [], events: [] };
+  state.turns.push(turn); renderMessages(); renderTrace(turn); scrollDown();
+  const started = performance.now();
+  const elapsed = () => ((performance.now() - started) / 1000).toFixed(1) + " s";
+  const onEvent = (kind, p) => {
+    if (kind === "llm") turn.events.push({ kind: "llm", html: `Model call ${p.iteration}`, time: `${p.latency_s.toFixed(1)} s` });
+    if (kind === "tool_call") {
+      turn.live.push(`<span class="t">${elapsed()}</span><span>calling <code>${esc(p.name)}</code> <code style="color:var(--faint)">${esc(p.arguments || "{}")}</code></span>`);
+      turn.events.push({ kind: "tool", html: `<span class="n">${esc(p.name)}</span>`, time: "" });
+    }
+    if (kind === "tool_result") {
+      const ev = [...turn.events].reverse().find((e) => e.kind === "tool" && !e.time);
+      if (ev) ev.time = p.ok ? `${p.duration_ms.toFixed(0)} ms` : p.error_code;
+    }
+    if (kind === "grounding_retry") turn.live.push(`<span class="t">${elapsed()}</span><span class="neg">ungrounded figures ${esc(p.numbers.join(", "))}, asking again</span>`);
+    if (kind === "done") { turn.trace = p; state.selected = state.turns.indexOf(turn); }
+    if (kind === "fatal") turn.trace = { ...emptyTrace(question), answer: `**Error:** ${p.message}`, status: "error" };
+    renderMessages(); renderTrace(turn.trace ? null : turn); scrollDown();
+  };
+  try {
+    const res = await fetch("/api/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, banker_id: state.banker, model: $("#model").value, history }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
+        const kind = chunk.match(/^event: (.*)$/m)?.[1]; const data = chunk.match(/^data: (.*)$/m)?.[1];
+        if (kind && data) onEvent(kind, JSON.parse(data));
+      }
+    }
+  } catch (err) {
+    onEvent("fatal", { message: err.message });
+  } finally {
+    state.busy = false; $("#send").disabled = false;
+  }
+}
+const emptyTrace = (q) => ({ question: q, run_id: "–", model: $("#model").value, banker_id: state.banker, llm_steps: [], tool_steps: [],
+  prompt_tokens: 0, completion_tokens: 0, wall_time_s: 0, iterations: 0, grounding: null, accessed_clients: [] });
+const scrollDown = () => { const m = $("#messages"); m.scrollTop = m.scrollHeight; };
+function autosize() { const ta = $("#question"); ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 140) + "px"; }
+
+/* ---- evaluation ------------------------------------------------------------ */
+async function loadEvals() {
+  const runs = await api("/api/evals");
+  const box = $("#eval");
+  if (!runs.length) { box.innerHTML = `<div class="trace-empty">No evaluation runs under runs/evals yet: run <code>pi eval</code>.</div>`; return; }
+  const color = (i) => `var(--m${i % 2})`;
+  const swatch = (i) => `<span class="swatch" style="background:${color(i)}"></span>`;
+  const o = runs.map((r) => r.overall);
+  const cats = Object.keys(runs[0].by_category);
+  const card = (r, i) => `<div><div class="kicker"><span>Model ${i + 1}</span><span>${r.overall.items} questions</span></div>
+    <div class="model-name">${swatch(i)}${esc(prettyModel(r.model))}</div>
+    <div class="model-slug">${esc(r.model)}</div>
+    <div class="model-figs">
+      <div><div class="v">${pct(r.overall.success_rate)}</div><div class="l">success rate</div></div>
+      <div><div class="v">${pct(r.overall.numeric_accuracy)}</div><div class="l">numerical accuracy</div></div>
+      <div><div class="v">${r.overall.latency_p50_s.toFixed(1)} s</div><div class="l">latency p50</div></div>
+      <div><div class="v">${r.overall.access_violations}</div><div class="l">access violations</div></div>
+    </div></div>`;
+  const bars = (metric, fmt, max) => cats.map((c) => `<div class="bar-row">
+      <div class="bar-label">${CATEGORY_LABELS[c] || c} <small>${runs[0].by_category[c].items}</small></div>
+      <div class="bar-pair">${runs.map((r, i) => { const v = r.by_category[c][metric] ?? 0;
+        return `<div class="bar"><i style="width:${(100 * v) / max * 0.86}%;background:${color(i)}"></i><b>${fmt(v)}</b></div>`; }).join("")}</div></div>`).join("");
+  const legend = `<div class="bars-legend">${runs.map((r, i) => `<span>${swatch(i)}${esc(prettyModel(r.model))}</span>`).join("")}</div>`;
+  const maxLat = Math.max(...runs.flatMap((r) => cats.map((c) => r.by_category[c].latency_p50_s || 0)));
+  // [label, key, format, higher is better]
+  const rows = [
+    ["Answer quality"],
+    ["Success rate", "success_rate", (v) => pct(v), true],
+    ["Numerical accuracy", "numeric_accuracy", (v) => pct(v), true],
+    ["Tool precision", "tool_precision", (v) => pct(v), true],
+    ["Tool recall", "tool_recall", (v) => pct(v), true],
+    ["Grounding and safety"],
+    ["Grounding rate", "grounding_rate", (v) => pct(v, 1), true],
+    ["Answers with ungrounded numbers", "answers_with_hallucinations", (v) => v, false],
+    ["Access violations", "access_violations", (v) => v, false],
+    ["Correct refusals", "refusal_accuracy", (v) => pct(v), true],
+    ["Failures (timeouts, loops, errors)", "failure_rate", (v) => pct(v), false],
+    ["Cost and speed"],
+    ["Latency p50", "latency_p50_s", (v) => v.toFixed(1) + " s", false],
+    ["Latency p95", "latency_p95_s", (v) => v.toFixed(1) + " s", false],
+    ["Tokens per question", "mean_tokens", (v) => fmtMoney(v), false],
+    ["Model calls per question", "mean_iterations", (v) => v.toFixed(1), false],
+  ];
+  const table = rows.map(([label, key, fmt, higher]) => {
+    if (!key) return `<tr class="group"><td colspan="${runs.length + 1}">${label}</td></tr>`;
+    const vals = o.map((x) => x[key]);
+    const best = higher ? Math.max(...vals) : Math.min(...vals);
+    const tie = vals.every((v) => v === best);
+    return `<tr><td>${label}</td>${vals.map((v) => `<td class="${v === best && !tie ? "best" : ""}">${fmt(v)}</td>`).join("")}</tr>`;
+  }).join("");
+  box.innerHTML = `
+    <h1>Model evaluation</h1>
+    <p class="lede">Same harness, same ${o[0].items} questions in French and English. Expected values are computed by the analytics engine, never typed by hand.</p>
+    <div class="grid-2">${runs.map(card).join("")}</div>
+    <div class="grid-2">
+      <div class="chart"><div class="kicker"><span>Success rate by category</span><span></span></div><div class="sub">Every expected value, mention or refusal found in the answer</div>${legend}${bars("success_rate", (v) => pct(v), 1)}</div>
+      <div class="chart"><div class="kicker"><span>Latency p50 by category</span><span></span></div><div class="sub">Wall time per question, all model and tool calls included</div>${legend}${bars("latency_p50_s", (v) => v.toFixed(1) + " s", maxLat)}</div>
+    </div>
+    <div class="kicker"><span>All metrics</span><span></span></div>
+    <table class="metrics"><thead><tr><th>Metric</th>${runs.map((r, i) => `<th>${swatch(i)} ${esc(prettyModel(r.model))}</th>`).join("")}</tr></thead><tbody>${table}</tbody></table>
+    <div class="note">Served by ${esc(state.meta.base_url)} · runs ${runs.map((r) => `<code>${esc(r.run)}</code>`).join(", ")}</div>`;
+}
+
+/* ---- boot ------------------------------------------------------------------ */
+function showView(name) {
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === name));
+  if (name === "evaluation" && !$("#eval").innerHTML) loadEvals();
+}
+
+async function boot() {
+  const params = new URLSearchParams(location.search);
+  state.meta = await api("/api/meta");
+  $("#asof").textContent = `Data as of ${fmtDate(state.meta.as_of_date)}`;
+  $("#banker").innerHTML = state.meta.bankers.map((b) => `<option value="${b.id}">${b.id} · ${esc(b.name)}</option>`).join("");
+  $("#model").innerHTML = state.meta.models.map((m) => `<option value="${esc(m)}">${esc(prettyModel(m))}</option>`).join("");
+  document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
+  $("#banker").addEventListener("change", (e) => { state.turns = []; state.selected = null; renderTrace(); loadBook(e.target.value); });
+  $("#ask-form").addEventListener("submit", (e) => { e.preventDefault(); ask($("#question").value); });
+  $("#question").addEventListener("input", autosize);
+  $("#question").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask($("#question").value); } });
+
+  // Replay saved traces: /?trace=<run_id>,<run_id>
+  const ids = (params.get("trace") || "").split(",").filter(Boolean);
+  const traces = await Promise.all(ids.map((id) => api(`/api/traces/${id}`)));
+  const banker = traces[0]?.banker_id || state.meta.bankers[0].id;
+  $("#banker").value = banker;
+  if (traces.length) {
+    $("#model").value = traces.at(-1).model;
+    state.turns = traces.map((t) => ({ question: t.question, trace: t }));
+    state.selected = traces.length - 1;
+  }
+  await loadBook(banker);
+  renderMessages(); renderTrace();
+  if (params.get("view") === "evaluation") showView("evaluation");
+}
+boot().catch((err) => { document.body.insertAdjacentHTML("beforeend", `<pre style="position:fixed;bottom:0;left:0;margin:12px;color:#cc0000">${esc(err.message)}</pre>`); });
+</script>
+</body>
+</html>

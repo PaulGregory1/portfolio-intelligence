@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "duckdb>=2.0.0",
+    "fastapi>=0.162.0",
     "mcp>=2.3.0",
     "numpy>=2.5.4",
     "openai>=3.42.0",
@@ -15,6 +16,7 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "rich>=15.0.0",
     "typer>=0.27.3",
+    "uvicorn>=0.54.0",
     "yfinance>=1.7.0",
 ]
 
@@ -54,6 +56,7 @@ addopts = "-q"
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "mypy>=2.4.1",
     "pandas-stubs>=3.1.0.261029",
     "pytest>=9.2.0",
